@@ -411,7 +411,7 @@ void Internal::generate_probes () {
     if (!is_binary_clause (c, a, b)) continue;
     noccs (a)++;
     noccs (b)++;
-  }
+  } // 這個迴圈做完, 只要每出現在新一次 binary clause 的 literal 次數都會加一, 這個 literal 有考慮正負兩種。
 
   for (int idx = 1; idx <= max_var; idx++) {
 
@@ -427,9 +427,9 @@ void Internal::generate_probes () {
     const bool have_pos_bin_occs = noccs (idx) > 0;
     const bool have_neg_bin_occs = noccs (-idx) > 0;
 
-    if (have_pos_bin_occs == have_neg_bin_occs) continue;
+    if (have_pos_bin_occs == have_neg_bin_occs) continue; // 因為 root 的目的是要讓它變成 false, 才能 imply 其他 literal 變成 true, 那我們不可能讓正負號兩種 literal 同時變成 false, 這種 literal 就不要用了。WHY??? 如果用了是不是也不會錯呢?
 
-    int probe = have_neg_bin_occs ? idx : -idx;
+    int probe = have_neg_bin_occs ? idx : -idx; // 如果是 -x 出現，就讓 x = true; 如果是 x 出現, 則讓 x = false
 
     // See the discussion where 'propfixed' is used below.
     //
@@ -575,16 +575,16 @@ bool Internal::probe_round () {
   while (!unsat &&
          !terminating () &&
          stats.propagations.probe < limit &&
-         (probe = next_probe ())) {
+         (probe = next_probe ())) { // 持續取出下一個要測試的 failed literal
     stats.probed++;
     LOG ("probing %d", probe);
-    probe_assign_decision (probe);
-    if (probe_propagate ()) backtrack ();
-    else failed_literal (probe);
+    probe_assign_decision (probe); // 假設這個 literal 是 true 看看
+    if (probe_propagate ()) backtrack (); // 作 BCP 之後看看有沒有 conflict, 沒有 conflict 代表不是 failed literal, 也就是說它的 assignment 沒有急迫性, 所以 backtrack 到原始狀態讓下一個 candidate 繼續去試
+    else failed_literal (probe); // 如果很幸運地出現 conflict, 代表它是 failed literal, 必須設定成 false 才可能讓整個 formula satisfiable。
   }
 
   if (unsat) LOG ("probing derived empty clause");
-  else if (propagated < trail.size ()) {
+  else if (propagated < trail.size ()) { // what does it mean?
     LOG ("probing produced %" PRId64 " units", trail.size () - propagated);
     if (!propagate ()) {
       LOG ("propagating units after probing results in empty clause");
@@ -634,15 +634,15 @@ void CaDiCaL::Internal::probe (bool update_limits) {
   //
   mark_duplicated_binary_clauses_as_garbage ();
 
-  for (int round = 1; round <= opts.proberounds; round++)
-    if (!probe_round ())
+  for (int round = 1; round <= opts.proberounds; round++) // 不懂做多次的意義何在
+    if (!probe_round ()) // line 532
       break;
 
   decompose ();         // ... and (ELS) afterwards.
 
   last.probe.propagations = stats.propagations.search;
 
-  if (!update_limits) return;
+  if (!update_limits) return; // what does this line mean?
 
   int64_t delta = opts.probeint * (stats.probingphases + 1);
   lim.probe = stats.conflicts + delta;

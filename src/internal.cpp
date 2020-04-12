@@ -424,9 +424,9 @@ bool Internal::preprocess_round (int round) {
     "starting round %" PRId64 " with %d variables and %" PRId64 " clauses",
     round, before.vars, before.clauses);
   int old_elimbound = lim.elimbound;
-  if (opts.probe) probe (false);
-  if (opts.elim) elim (false);
-  if (opts.condition) condition (false);
+  if (opts.probe) probe (false); // line 617 of probe.cpp
+  if (opts.elim) elim (false); // line 798 of elim.cpp
+  if (opts.condition) condition (false); // line 847 of condition.cpp
   after.vars = active ();
   after.clauses = stats.current.irredundant;
   assert (preprocessing);
@@ -436,13 +436,13 @@ bool Internal::preprocess_round (int round) {
     round, after.vars, after.clauses);
   STOP (preprocess);
   report ('P');
-  if (unsat) return false;
-  if (after.vars < before.vars) return true;
-  if (old_elimbound < lim.elimbound) return true;
-  return false;
+  if (unsat) return false; // 如果已經發現 unsat，那也不用再試了
+  if (after.vars < before.vars) return true; // 如果有進步, want to try another round (line 448)
+  if (old_elimbound < lim.elimbound) return true;  // 如果有進步, want to try another round (line 448)
+  return false; // 沒有進步，試再多次都一樣
 }
 
-int Internal::preprocess () {
+int Internal::preprocess () { // used in line 588
   if (opts.simplify)
     for (int i = 0; i < lim.preprocessing; i++)
       if (!preprocess_round (i))
@@ -517,7 +517,7 @@ int Internal::local_search_round (int round) {
   if (LONG_MAX / round > limit) limit *= round;
   else limit = LONG_MAX;
 
-  int res = walk_round (limit, true);
+  int res = walk_round (limit, true); // line 389 of walk.cpp
 
   assert (localsearching);
   localsearching = false;
@@ -537,16 +537,16 @@ int Internal::local_search () {
   int res = 0;
 
   for (int i = 1; !res && i <= lim.localsearch; i++)
-    res = local_search_round (i);
+    res = local_search_round (i); // line 502
 
   if (res == 10) {
     LOG ("local search determined formula to be satisfiable");
     assert (!stats.walk.minimum);
-    res = try_to_satisfy_formula_by_saved_phases ();
+    res = try_to_satisfy_formula_by_saved_phases (); // line 456
   } else if (res == 20) {
     LOG ("local search determined assumptions to be inconsistent");
     assert (!assumptions.empty ());
-    produce_failed_assumptions ();
+    produce_failed_assumptions (); // line 486
   }
 
   return res;
@@ -564,7 +564,7 @@ int Internal::solve () {
     res = 20;
   } else if (!propagate ()) {
     LOG ("root level propagation produces conflict");
-    learn_empty_clause ();
+    learn_empty_clause (); // 都已經知道 unsat 了, 為什麼還要做事情?
     res = 20;
   } else {
 
@@ -585,12 +585,12 @@ int Internal::solve () {
       }
     }
 
-    if (!res) res = preprocess ();
-    if (!res) res = local_search ();
-    if (!res) res = lucky_phases ();
+    if (!res) res = preprocess (); // line 445
+    if (!res) res = local_search (); // line 531, which runs "random walk local search" based on 'ProbSAT' ideas. (所以先不去 trace 它)
+    if (!res) res = lucky_phases (); // line 292 of lucky.cpp
     if (!res) {
       if (terminating ()) res = 0;
-      else res = cdcl_loop_with_inprocessing ();
+      else res = cdcl_loop_with_inprocessing (); // line 180
     }
   }
   if (termination_forced) {

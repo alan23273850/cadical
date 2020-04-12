@@ -262,7 +262,7 @@ struct Internal {
   //
   double scale (double v) const;
 
-  // Unsigned literals (abs) with checks.
+  // Unsigned literals (abs) with checks. (i.e., return |lit|)
   //
   int vidx (int lit) const {
     int idx;
@@ -274,11 +274,11 @@ struct Internal {
 
   // Unsigned version with LSB denoting sign.  This is used in indexing arrays
   // by literals.  The idea is to keep the elements in such an array for both
-  // the positive and negated version of a literal close together.
+  // the positive and negated version of a literal close together. (i.e., return 2*|lit| + (lit<0))
   //
   unsigned vlit (int lit) { return (lit < 0) + 2u * (unsigned) vidx (lit); }
 
-  int u2i (unsigned u) {
+  int u2i (unsigned u) { // inverse of the above "vlit" function.
     assert (u > 1);
     int res = u/2;
     assert (res <= max_var);
@@ -316,18 +316,18 @@ struct Internal {
 
   // Marking variables with a sign (positive or negative).
   //
-  signed char marked (int lit) const {
-    signed char res = marks [ vidx (lit) ];
-    if (lit < 0) res = -res;
+  signed char marked (int lit) const { // 找 lit 或 -|lit| 的值
+    signed char res = marks [ vidx (lit) ]; // 回傳對應的 literal |lit| 的值
+    if (lit < 0) res = -res; // 如果輸入小於 0, 代表我想要找 -|lit|
     return res;
   }
-  void mark (int lit) {
-    assert (!marked (lit));
+  void mark (int lit) { // 設定 lit 或 -|lit| 為正
+    assert (!marked (lit)); // 必須是 unassigned 的狀態?
     marks[vidx (lit)] = sign (lit);
-    assert (marked (lit) > 0);
-    assert (marked (-lit) < 0);
+    assert (marked (lit) > 0); // Why???
+    assert (marked (-lit) < 0); // Why???
   }
-  void unmark (int lit) {
+  void unmark (int lit) { // 設定 lit 或 -|lit| 為 0
     marks [ vidx (lit) ] = 0;
     assert (!marked (lit));
   }

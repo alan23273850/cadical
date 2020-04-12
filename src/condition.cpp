@@ -869,7 +869,7 @@ void Internal::condition (bool update_limits) {
     "started after %ld conflicts limited by %ld propagations",
     stats.conflicts, limit);
 
-  long blocked = condition_round (limit);
+  long blocked = condition_round (limit); // line 151
 
   STOP_SIMPLIFIER (condition, CONDITION);
   report ('g', !blocked);

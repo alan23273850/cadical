@@ -75,7 +75,7 @@ void Internal::backtrack (int new_level) {
   if (new_level == level) return;
 
   stats.backtracks++;
-  update_target_and_best ();
+  update_target_and_best (); // line 43 還沒弄懂這一行
 
   const size_t assigned = control[new_level+1].trail;
 
