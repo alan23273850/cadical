@@ -390,40 +390,40 @@ Clause * Internal::new_driving_clause (const int glue, int & jump) {
 /*------------------------------------------------------------------------*/
 
 // If chronological backtracking is enabled we need to find the actual
-// conflict level and then potentially can also reuse the conflict clause
+// conflict level and then potentially can also reuse the conflict clause (注: 按照那篇 SAT'18 的定義這邊的 conflict clause 其實應該是 conflict"ing" clause)
 // as driving clause instead of deriving a redundant new driving clause
 // (forcing 'forced') if the number 'count' of literals in conflict assigned
 // at the conflict level is exactly one.
 
-inline int Internal::find_conflict_level (int & forced) {
+inline int Internal::find_conflict_level (int & forced) { // 注意 forced 其實也是另一個回傳值
 
   assert (conflict);
   assert (opts.chrono);
 
-  int res = 0, count = 0;
+  int res = 0, count = 0; // res: 記錄目前遇到最高級 literal 的級數; count: 記錄目前遇到最高級 literal 的個數
 
-  forced = 0;
+  forced = 0; // 記錄唯一一個最高級的 literal 為何，如果最高級 literal 有兩個以上則此值最後會歸 0
 
   for (const auto & lit : *conflict) {
     const int tmp = var (lit).level;
     if (tmp > res) {
       res = tmp;
-      forced = lit;
+      forced = lit; // 標記第一次遇到最高級的 literal
       count = 1;
     } else if (tmp == res) {
       count++;
       if (res == level && count > 1)
-        break;
+        break; // 這邊應該只是一個小小加速的技巧, 不影響正確性, 因為 conflict level 不可能超過 current decision level, 所以一旦摸到上界我就判定那個 literal 是最高級的, 那自然最高級 literal 不唯一的話就馬上 ban 掉。
     }
   }
 
   LOG ("%d literals on actual conflict level %d", count, res);
 
-  const int size = conflict->size;
-  int * lits = conflict->literals;
+  const int size = conflict->size; // clause 有幾個 literal
+  int * lits = conflict->literals; // 記錄 literal 的 array
 
   // Move the two highest level literals to the front.
-  //
+  // 從這邊開始下面好像就跟 watch list 有關, 我都還沒弄懂這邊。
   for (int i = 0; i < 2; i++) {
 
     const int lit = lits[i];
@@ -457,9 +457,9 @@ inline int Internal::find_conflict_level (int & forced) {
   // Only if the number of highest level literals in the conflict is one
   // then we can reuse the conflict clause as driving clause for 'forced'.
   //
-  if (count != 1) forced = 0;
+  if (count != 1) forced = 0; // 最高級的 literal 超過一個的話就不能用 imply 這招了!
 
-  return res;
+  return res; // 回傳最高級 literal 的級數
 }
 
 /*------------------------------------------------------------------------*/
@@ -471,26 +471,26 @@ inline int Internal::determine_actual_backtrack_level (int jump) {
   assert (level > jump);
 
   if (!opts.chrono) {
-    res = jump;
+    res = jump; // 只考慮傳統 non-chronological 的話, 就是傳統的挑除了 1UIP 以外最高的 literal 級數
     LOG ("chronological backtracking disabled using jump level %d", res);
-  } else if (opts.chronoalways) {
+  } else if (opts.chronoalways) { // 在任何情況下都強迫使用新版的 chronological 的話, 就是僅比當前的 decision level 下降一層
     stats.chrono++;
     res = level - 1;
     LOG ("forced chronological backtracking to level %d", res);
-  } else if (jump >= level - 1) {
+  } else if (jump >= level - 1) { // 但前面又 assert (level > jump), 所以這句話其實是 jump == level - 1 的意思
     res = jump;
     LOG ("jump level identical to chronological backtrack level %d", res);
-  } else if ((size_t) jump < assumptions.size ()) {
+  } else if ((size_t) jump < assumptions.size ()) { // 我還不懂 assumptions 是什麼意思
     res = jump;
     LOG ("using jump level %d since it is lower than assumption level %zd",
       res, assumptions.size ());
-  } else if (level - jump > opts.chronolevelim) {
+  } else if (level - jump > opts.chronolevelim) { // 如果 non-chronological 的級數太低導致砍掉重練的成本太大，就統一改成 chronological
     stats.chrono++;
     res = level - 1;
     LOG ("back-jumping over %d > %d levels prohibited"
       "thus backtracking chronologically to level %d",
       level - jump, opts.chronolevelim, res);
-  } else if (opts.chronoreusetrail) {
+  } else if (opts.chronoreusetrail) { // 否則就讓演算法幫我們挑最適合的級數, 以合理地重複使用那些已經選好的 literal
 
     int best_idx = 0, best_pos = 0;
 
@@ -511,7 +511,7 @@ inline int Internal::determine_actual_backtrack_level (int jump) {
       }
       LOG ("best variable bumped %" PRId64 "", bumped (best_idx));
     }
-    assert (best_idx);
+    assert (best_idx); // 到這邊應該已經選好最棒的 literal 了, 只是我還不知道方法的細節
     LOG ("best variable %d at trail position %d", best_idx, best_pos);
 
     // Now find the frame and decision level in the control stack of that
@@ -523,7 +523,7 @@ inline int Internal::determine_actual_backtrack_level (int jump) {
     //
     res = jump;
     while (res < level-1 && control[res+1].trail <= best_pos)
-      res++;
+      res++; // 目的僅是找出那個 best variable 的 decision level, 但我沒去驗證這個迴圈方法有沒有漏洞
 
     if (res == jump)
       LOG ("default non-chronological back-jumping to level %d", res);
@@ -532,13 +532,13 @@ inline int Internal::determine_actual_backtrack_level (int jump) {
       LOG ("chronological backtracking to level %d to reuse trail", res);
     }
 
-  } else {
+  } else { // 如果要 opts.chrono 卻又不肯 opts.chronoreusetrail, 是不是一個奇怪的人呢?
     res = jump;
     LOG ("non-chronological back-jumping to level %d", res);
   }
 
   return res;
-}
+} // Question: 最後兩個 else-if 和 else 的 block 是否可合併成前者, 然後把最後一個砍掉, 這樣比較合理吧? opts.chronoreusetrail 選項應是多餘?
 
 /*------------------------------------------------------------------------*/
 
@@ -588,7 +588,7 @@ void Internal::analyze () {
 
   START (analyze);
 
-  assert (conflict);
+  assert (conflict); // 它唯二在 internal.cpp 出現的地方 (line 191, 494) 都有前提 !propagate() 必須被滿足, 所以一定有 conflicting clause
 
   // First update moving averages of trail height at conflict.
   //
@@ -599,9 +599,9 @@ void Internal::analyze () {
 
   if (opts.chrono) {
 
-    int forced;
+    int forced; // 全意是 forced literal, 記錄哪個 literal 到最後會被 imply
 
-    const int conflict_level = find_conflict_level (forced);
+    const int conflict_level = find_conflict_level (forced); // line 398, 回傳那個 conflicting clause 裡面所有 literal 的最高級數為何, 以及未來會被 imply 的 literal (若有) 為何
 
     // In principle we can perform conflict analysis as in non-chronological
     // backtracking except if there is only one literal with the maximum
@@ -612,10 +612,10 @@ void Internal::analyze () {
     // that the pseudo code in the paper only backtracks while we eagerly
     // assign the single literal on the highest decision level.
 
-    if (forced) {
+    if (forced) { // 如果有唯一一個最高級的 literal 的話
 
       assert (forced);
-      assert (conflict_level > 0);
+      assert (conflict_level > 0); // 這一行我不敢保證
       LOG ("single highest level literal %d", forced);
 
       // The pseudo code in the SAT'18 paper actually backtracks to the
@@ -623,19 +623,19 @@ void Internal::analyze () {
       // to 'conflict_level-1', which is more in the spirit of chronological
       // backtracking anyhow and thus we also do the latter.
       //
-      backtrack (conflict_level - 1);
+      backtrack (conflict_level - 1); // 這區要有 chronological 精神的話, 當然要讓 backtrack level 盡可能的高, 又必須把 highest literal 砍掉, 那當然選 conflict_level - 1
 
       LOG ("forcing %d", forced);
-      search_assign_driving (forced, conflict);
+      search_assign_driving (forced, conflict); // 強迫把 forced 這個 literal 設成 true
 
-      conflict = 0;
+      conflict = 0; // 因為 conflict 已經在上面處理掉了, 所以這邊旗標值應該要歸 0
       STOP (analyze);
-      return;
+      return; // 該做的都做了，下面的就不用再管了
     }
 
     // Backtracking to the conflict level is in the pseudo code in the
     // SAT'18 chronological backtracking paper, but not in their actual
-    // implementation.  In principle we do not need to backtrack here.
+    // implementation.  In principle we do not need to backtrack here. (我同意這句話!!!)
     // However, as a side effect of backtracking to the conflict level we
     // set 'level' to the conflict level which then allows us to reuse the
     // old 'analyze' code as is.  The alternative (which we also tried but
@@ -643,7 +643,7 @@ void Internal::analyze () {
     // analysis, which however requires to pass it to the 'analyze_reason'
     // and 'analyze_literal' functions.
     //
-    backtrack (conflict_level);
+    backtrack (conflict_level); // 上面註解已有解釋為什麼這邊要作多餘的 backtrack, 但我還沒弄懂
   }
 
   // Actual conflict on root level, thus formula unsatisfiable.
@@ -678,7 +678,7 @@ void Internal::analyze () {
   int open = 0;                 // Seen but not processed on this level.
   int uip = 0;                  // The first UIP literal.
 
-  for (;;) {
+  for (;;) { // 這一大段迴圈都是在找 uip (應該是ㄅ)
     analyze_reason (uip, reason, open);
     uip = 0;
     while (!uip) {
@@ -691,13 +691,13 @@ void Internal::analyze () {
     reason = var (uip).reason;
     LOG (reason, "analyzing %d reason", uip);
   }
-  LOG ("first UIP %d", uip);
+  LOG ("first UIP %d", uip); // 找到 uip 了!! 但詳細的方法我還不太會...
   clause.push_back (-uip);
 
   // Update glue and learned (1st UIP literals) statistics.
   //
   int size = (int) clause.size ();
-  const int glue = (int) levels.size () - 1;
+  const int glue = (int) levels.size () - 1; // 不太懂 glue 的意義為何?
   LOG (clause, "1st UIP size %d and glue %d clause", size, glue);
   UPDATE_AVERAGE (averages.current.glue.fast, glue);
   UPDATE_AVERAGE (averages.current.glue.slow, glue);
@@ -712,7 +712,7 @@ void Internal::analyze () {
   // Minimize the 1st UIP clause as pioneered by Niklas Soerensson in
   // MiniSAT and described in our joint SAT'09 paper.
   //
-  if (size > 1) {
+  if (size > 1) { // 我在想下面那一層 opts.minimize 的條件式是否可以往上拉到這一層?
     if (opts.minimize) minimize_clause ();
     size = (int) clause.size ();
   }
@@ -727,29 +727,29 @@ void Internal::analyze () {
   // flipped 1st UIP literal.
   //
   int jump;
-  Clause * driving_clause = new_driving_clause (glue, jump);
+  Clause * driving_clause = new_driving_clause (glue, jump); // 這應該就是我們新學到的 learned clause 了
   UPDATE_AVERAGE (averages.current.jump, jump);
 
-  int new_level = determine_actual_backtrack_level (jump);;
+  int new_level = determine_actual_backtrack_level (jump);; // 就是 paper 虛擬碼裡面提到的 b 值, 注意這邊裡面的計算方式是已經有根據不同模式去做調整
   UPDATE_AVERAGE (averages.current.level, new_level);
-  backtrack (new_level);
+  backtrack (new_level); // 既然已經算好目標高度, 當然就可以直接 backtrack 了!
 
-  if (uip) search_assign_driving (-uip, driving_clause);
-  else learn_empty_clause ();
+  if (uip) search_assign_driving (-uip, driving_clause); // 如果有 uip 的話當然就強迫把它的反向 -uip 設成 true, 才代表我們有確實學習到新的 clause
+  else learn_empty_clause (); // 不確定其正確性
 
-  if (stable) reluctant.tick (); // Reluctant has its own 'conflict' counter.
+  if (stable) reluctant.tick (); // Reluctant has its own 'conflict' counter. 這是什麼??
 
   // Clean up.
   //
   clear_analyzed_literals ();
   clear_analyzed_levels ();
   clause.clear ();
-  conflict = 0;
+  conflict = 0; // 因為 conflict 已經在上面處理掉了, 所以這邊旗標值應該要歸 0
 
   STOP (analyze);
 
-  if (driving_clause && opts.eagersubsume)
-    eagerly_subsume_recently_learned_clauses (driving_clause);
+  if (driving_clause && opts.eagersubsume) // 吃吃吃, 吃吃吃, 能吃就吃
+    eagerly_subsume_recently_learned_clauses (driving_clause); // 還沒閱讀其細節
 }
 
 // We wait reporting a learned unit until propagation of that unit is

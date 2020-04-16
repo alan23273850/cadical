@@ -29,60 +29,60 @@ static Clause * decision_reason = &decision_reason_clause;
 
 inline int Internal::assignment_level (int lit, Clause * reason) {
 
-  assert (opts.chrono);
+  assert (opts.chrono); // 只在 chronological 環境下才需要
   if (!reason) return level;
 
-  int res = 0;
+  int res = 0; // 記錄 clause 內除了 lit 之外最高級的 literal 的級數
 
   for (const auto & other : *reason) {
-    if (other == lit) continue;
+    if (other == lit) continue; // 自己不能決定自己的 level
     assert (val (other));
     int tmp = var (other).level;
     if (tmp > res) res = tmp;
   }
 
-  return res;
+  return res; // 回傳答案
 }
 
 /*------------------------------------------------------------------------*/
-
+// 原則上這一行就是對 reason 裡面剩下唯一的 lit 去作賦值讓整個 clause 變成 true。
 inline void Internal::search_assign (int lit, Clause * reason) {
 
   if (level) require_mode (SEARCH);
 
-  const int idx = vidx (lit);
-  assert (!vals[idx]);
-  assert (!flags (idx).eliminated () || reason == decision_reason);
-  Var & v = var (idx);
-  int lit_level;
+  const int idx = vidx (lit); // 找 lit 的變數編號 (正數, 取絕對值)
+  assert (!vals[idx]); // 因為我們即將對 lit 賦值, 故此時它不應該有任何值才對
+  assert (!flags (idx).eliminated () || reason == decision_reason); // 這一行還沒弄懂
+  Var & v = var (idx); // 取出該變數的資料結構以便更新
+  int lit_level; // 這個 lit 被賦值時所對應的 level
 
   // The following cases are explained in the two comments above before
   // 'decision_reason' and 'assignment_level'.
   //
-  if (!reason) lit_level = 0;   // unit
-  else if (reason == decision_reason) lit_level = level, reason = 0;
-  else if (opts.chrono) lit_level = assignment_level (lit, reason);
-  else lit_level = level;
-  if (!lit_level) reason = 0;
+  if (!reason) lit_level = 0;   // unit, 沒有理由代表是天然的 implication, 故其 level 只能為 0
+  else if (reason == decision_reason) lit_level = level, reason = 0; // 這一行還沒弄懂
+  else if (opts.chrono) lit_level = assignment_level (lit, reason); // 找出剩下的 literal 裡面最高的級數
+  else lit_level = level; // 當 non-chronological 的時候, WHY???
+  if (!lit_level) reason = 0; // 如果後來發現是天然的 implication, 代表它真的不需要理由, 再次確認把 reason 設成 NULL
 
-  v.level = lit_level;
-  v.trail = (int) trail.size ();
-  v.reason = reason;
-  if (!lit_level) learn_unit_clause (lit);  // increases 'stats.fixed'
-  const signed char tmp = sign (lit);
+  v.level = lit_level; // 存變數賦值等級
+  v.trail = (int) trail.size (); // 存變數賦值順序
+  v.reason = reason; // 存變數賦值理由
+  if (!lit_level) learn_unit_clause (lit);  // increases 'stats.fixed', 天然的 implication 便是一個 unit clause
+  const signed char tmp = sign (lit); // 從現在開始下面 5 行, 變數前帶正號則賦予變數正號, 變數前帶負號則賦予變數負號, 總之要讓 lit 是正的
   vals[idx] = tmp;
   vals[-idx] = -tmp;
   assert (val (lit) > 0);
   assert (val (-lit) < 0);
   if (!searching_lucky_phases)
-    phases.saved[idx] = tmp;                // phase saving during search
-  trail.push_back (lit);
+    phases.saved[idx] = tmp;                // phase saving during search, 我還沒學到這個
+  trail.push_back (lit); // 已經賦值的 lit 根據定義當然要存進 trail 之中
 #ifdef LOGGING
   if (!lit_level) LOG ("root-level unit assign %d @ 0", lit);
   else LOG (reason, "search assign %d @ %d", lit, lit_level);
 #endif
 
-  if (watching ()) {
+  if (watching ()) { // 我還沒研究 watch 的結構
     const Watches & ws = watches (-lit);
     if (!ws.empty ()) {
       const Watch & w = ws[0];
@@ -158,7 +158,7 @@ bool Internal::propagate () {
     LOG ("propagating %d", -lit);
     Watches & ws = watches (lit);
 
-    const const_watch_iterator eow = ws.end ();
+    const const_watch_iterator eow = ws.end (); // eow stands for "end of watch"?
     const_watch_iterator i = ws.begin ();
     watch_iterator j = ws.begin ();
 
