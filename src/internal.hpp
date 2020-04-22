@@ -315,19 +315,19 @@ struct Internal {
   void rescore ();
 
   // Marking variables with a sign (positive or negative).
-  //
-  signed char marked (int lit) const { // 找 lit 或 -|lit| 的值
-    signed char res = marks [ vidx (lit) ]; // 回傳對應的 literal |lit| 的值
-    if (lit < 0) res = -res; // 如果輸入小於 0, 代表我想要找 -|lit|
+  // 注意它似乎和一般的 assignment 並不相同, 只是為了計算上的方便去作單純的標記, 像 gates.cpp 的 find_and_gate 就有用到!
+  signed char marked (int lit) const { // 找出 lit 的標記
+    signed char res = marks [ vidx (lit) ];
+    if (lit < 0) res = -res;
     return res;
   }
-  void mark (int lit) { // 設定 lit 或 -|lit| 為正
-    assert (!marked (lit)); // 必須是 unassigned 的狀態?
+  void mark (int lit) { // 標記 lit 為正, 那相對地 -lit 就 "自動" 為負
+    assert (!marked (lit)); // 必須是還沒標記的狀態
     marks[vidx (lit)] = sign (lit);
-    assert (marked (lit) > 0); // Why???
-    assert (marked (-lit) < 0); // Why???
+    assert (marked (lit) > 0);
+    assert (marked (-lit) < 0);
   }
-  void unmark (int lit) { // 設定 lit 或 -|lit| 為 0
+  void unmark (int lit) { // 取消 lit 以及 -lit 的標記
     marks [ vidx (lit) ] = 0;
     assert (!marked (lit));
   }
@@ -975,7 +975,7 @@ struct Internal {
   // allows a branch-less check for the value of literal and is considered
   // substantially faster than negating the result if the argument is
   // negative.  We also avoid taking the absolute value.
-  //
+  // 特別想到此種設計技巧是不是因為有實驗證實?
   signed char val (int lit) const {
     assert (-max_var <= lit), assert (lit), assert (lit <= max_var);
     return vals[lit];
