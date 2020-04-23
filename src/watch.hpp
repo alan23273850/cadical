@@ -33,7 +33,7 @@ typedef vector<Watch> Watches;          // of one literal
 typedef Watches::iterator watch_iterator;
 typedef Watches::const_iterator const_watch_iterator;
 
-inline void remove_watch (Watches & ws, Clause * clause) {
+inline void remove_watch (Watches & ws, Clause * clause) { // 從 ws 這個 watch list 挖掉正在觀察 clause 的那個 watch 結構 (理論上只會有一個)
   const auto end = ws.end ();
   auto i = ws.begin ();
   for (auto j = i; j != end; j++) {
