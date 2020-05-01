@@ -157,7 +157,7 @@ struct Internal {
   vector<Var> vtab;             // variable table [1,max_var]
   Links links;                  // table of links for decision queue
   vector<Flags> ftab;           // variable and literal flags
-  vector<int64_t> btab;         // enqueue time stamps for queue
+  vector<int64_t> btab;         // enqueue time stamps for queue, b 應該是 bump 的意思
   vector<int64_t> gtab;         // time stamp table to recompute glue
   vector<Occs> otab;            // table of occurrences for all literals
   vector<int> ptab;             // table for caching probing attempts
@@ -437,15 +437,15 @@ struct Internal {
     remove_watch (watches (l1), c);
   }
 
-  // Update queue to point to last potentially still unassigned variable.
+  // Update queue to point to last potentially still unassigned variable. (注意 potentially 這個詞, 它只代表有可能性、而非一定會)
   // All variables after 'queue.unassigned' in bump order are assumed to be
   // assigned.  Then update the 'queue.bumped' field and log it.  This is
   // inlined here since it occurs in several inner loops.
-  //
+  // 白話來說, 這個函式就是負責更新 next-search 這個指標所指向的變數及其對應的時間戳 (位置)
   inline void update_queue_unassigned (int idx) {
     assert (0 < idx), assert (idx <= max_var);
     queue.unassigned = idx;
-    queue.bumped = btab[idx];
+    queue.bumped = btab[idx]; // unassigned 所指的變數當初 enqueue 時的 timestamp (可以看成是在 queue 的 position)
     LOG ("queue unassigned now %d bumped %" PRId64 "", idx, btab[idx]);
   }
 
@@ -1149,10 +1149,10 @@ inline bool score_smaller::operator () (unsigned a, unsigned b) {
   double s = internal->stab[a];
   double t = internal->stab[b];
 
-  if (s < t) return true;
-  if (s > t) return false;
+  if (s < t) return true; // 如果 a 的 score 小於 b 的 score, 就是 true
+  if (s > t) return false; // 如果 a 的 score 大於 b 的 score, 就是 false
 
-  return a > b;
+  return a > b; // 若 a 和 b 的 score 相等, 就看 a 的變數是不是比較大
 }
 
 /*------------------------------------------------------------------------*/

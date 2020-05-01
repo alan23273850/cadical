@@ -11,19 +11,19 @@ namespace CaDiCaL {
 
 int Internal::next_decision_variable_on_queue () {
   int64_t searched = 0;
-  int res = queue.unassigned;
-  while (val (res))
+  int res = queue.unassigned; // 從那個有名的 next-search 指標開始查找
+  while (val (res)) // 往左邊持續搜尋直到找到 unassigned 的變數
     res = link (res).prev, searched++;
-  if (searched) {
+  if (searched) { // 如果指標確實有往前 (但我不太確定這個 guard 是否真有必要, 尤其是對於 update_queue_unassigned 而言, 是基於效率考量嗎?)
     stats.searched += searched;
-    update_queue_unassigned (res);
+    update_queue_unassigned (res); // 因為 res 快要變成 assigned 了, 所以要把 next-search 指標向左移至 res 以增進效率, 這也是當初指標設立的初衷。
   }
   LOG ("next queue decision variable %d bumped %" PRId64 "", res, bumped (res));
   return res;
 }
 
 // This function determines the best decision with respect to score.
-//
+// 很簡單, 持續檢查 heap 的 top (best) element 是不是還沒被 assign, 如果還沒那它當然可以成為我們的候選人, 如果已經 assign 的話就只能拿掉繼續檢查下一個了。
 int Internal::next_decision_variable_with_best_score () {
   int res = 0;
   for (;;) {
@@ -35,7 +35,7 @@ int Internal::next_decision_variable_with_best_score () {
   return res;
 }
 
-int Internal::next_decision_variable () {
+int Internal::next_decision_variable () { // 選出下一個 decision variable, 依據當下的環境可以走 VMTF 或 EVSIDS 兩種模式。
   if (use_scores ()) return next_decision_variable_with_best_score ();
   else               return next_decision_variable_on_queue ();
 }
@@ -77,8 +77,8 @@ int Internal::decide () {
   assert (!satisfied ());
   START (decide);
   int res = 0;
-  if ((size_t) level < assumptions.size ()) {
-    const int lit = assumptions[level];
+  if ((size_t) level < assumptions.size ()) { // 如果還有一些假設是 true 的變數還沒用到
+    const int lit = assumptions[level]; // 取出之
     assert (assumed (lit));
     const signed char tmp = val (lit);
     if (tmp < 0) {
@@ -94,9 +94,9 @@ int Internal::decide () {
       LOG ("deciding assumption %d", lit);
       search_assume_decision (lit);
     }
-  } else {
+  } else { // 如果已經沒有預先假設的變數了
     stats.decisions++;
-    int idx = next_decision_variable ();
+    int idx = next_decision_variable (); // 找出下一個要決定的變數
     const bool target = opts.stabilizephase && stable;
     int decision = decide_phase (idx, target);
     search_assume_decision (decision);

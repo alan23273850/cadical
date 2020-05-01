@@ -23,7 +23,7 @@ namespace CaDiCaL {
 // literals already exists.
 
 bool
-Internal::ternary_find_binary_clause (int a, int b) {
+Internal::ternary_find_binary_clause (int a, int b) { // only used in line 115
   assert (occurring ());
   assert (active (a));
   assert (active (b));
@@ -46,7 +46,7 @@ Internal::ternary_find_binary_clause (int a, int b) {
 // literals  already exists or is subsumed by an existing binary clause.
 
 bool
-Internal::ternary_find_ternary_clause (int a, int b, int c) {
+Internal::ternary_find_ternary_clause (int a, int b, int c) { // only used in line 118
   assert (occurring ());
   assert (active (a));
   assert (active (b));
@@ -90,7 +90,7 @@ Internal::ternary_find_ternary_clause (int a, int b, int c) {
 // needs to be cleared in any case.
 
 bool
-Internal::hyper_ternary_resolve (Clause * c, int pivot, Clause * d) {
+Internal::hyper_ternary_resolve (Clause * c, int pivot, Clause * d) { // only used in line 151
   LOG ("hyper binary resolving on pivot %d", pivot);
   LOG (c, "1st antecedent");
   LOG (d, "2nd antecedent");
@@ -128,7 +128,7 @@ Internal::hyper_ternary_resolve (Clause * c, int pivot, Clause * d) {
 // the effort spent in 'ternary' is that it should be similar to one
 // propagation step during search.
 
-void Internal::ternary_lit (int pivot, int64_t & steps, int64_t & htrs) {
+void Internal::ternary_lit (int pivot, int64_t & steps, int64_t & htrs) { // only used in line 195
   LOG ("starting hyper ternary resolutions on pivot %d", pivot);
   for (const auto & c : occs (pivot)) {
     if (htrs < 0) break;
@@ -181,7 +181,7 @@ void Internal::ternary_lit (int pivot, int64_t & steps, int64_t & htrs) {
 // Same as 'ternary_lit' but pick the phase of the variable based on the
 // number of positive and negative occurrence.
 
-void Internal::ternary_idx (int idx, int64_t & steps, int64_t & htrs) {
+void Internal::ternary_idx (int idx, int64_t & steps, int64_t & htrs) { // only used in line 250
   assert (0 < idx);
   assert (idx <= max_var);
   if (!active (idx)) return;
@@ -208,7 +208,7 @@ void Internal::ternary_idx (int idx, int64_t & steps, int64_t & htrs) {
 // 'ternary' variable flag is updated during adding (ternary) resolvents.
 // This function goes over each variable just once.
 
-bool Internal::ternary_round (int64_t & steps_limit, int64_t & htrs_limit) {
+bool Internal::ternary_round (int64_t & steps_limit, int64_t & htrs_limit) { // only used in line 338
 
   assert (!unsat);
 
@@ -276,7 +276,7 @@ bool Internal::ternary_round (int64_t & steps_limit, int64_t & htrs_limit) {
 
 /*------------------------------------------------------------------------*/
 
-bool Internal::ternary () {
+bool Internal::ternary () { // only used in line 629 of probe.cpp
 
   assert (opts.simplify);
 

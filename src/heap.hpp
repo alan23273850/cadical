@@ -59,7 +59,7 @@ template<class C> class heap {
   void exchange (unsigned a, unsigned b) {
     unsigned & i = index (a), & j = index (b);
     swap (array[i], array[j]);
-    swap (i, j);
+    swap (i, j); // 注意 index 函式本身就回傳 pos 陣列元素了
   }
 
   // Bubble up an element as far as necessary.
@@ -73,14 +73,14 @@ template<class C> class heap {
   // Bubble down an element as far as necessary.
   //
   void down (unsigned e) {
-    while (has_left (e)) {
-      unsigned c = left (e);
+    while (has_left (e)) { // 如果沒有 left 卻有 right, 就不用往下檢查了嗎? 還是沒有 left 就不可能會有 right 呢?
+      unsigned c = left (e); // 不懂為什麼這邊變數名要用 c 而不是 l
       if (has_right (e)) {
         unsigned r = right (e);
-        if (less (c, r)) c = r;
+        if (less (c, r)) c = r; // 讓 c 變成左右兩個 child 之中較大的那個數
       }
-      if (!less (e, c)) break;
-      exchange (e, c);
+      if (!less (e, c)) break; // 如果 e 比任何一個 child 都還要大, 那它也沒辦法往下沉了, 直接跳出
+      exchange (e, c); // 否則 e 就和較大的那個 child 交換!
     }
   }
 
@@ -139,8 +139,8 @@ public:
     assert (i < (size_t) invalid_heap_position);
     array.push_back (e);
     index (e) = (unsigned) i;
-    up (e);
-    down (e);
+    up (e); // 就往上浮直到不能浮為止
+    down (e); // 但我不懂為什麼還要往下沉, 因為如果能往上爬的話代表它已經幹掉它的上司 "以及" 那個上司原本的兩個附屬手下, 這樣看起來根本沒有下沉的可能啊?!
     check ();
   }
 
@@ -150,7 +150,7 @@ public:
 
   // Removes the maximum element in the heap.
   //
-  unsigned pop_front () {
+  unsigned pop_front () { // 先把最後一個元素抓到空缺的第一格, 再往下沉到不能再沉為止。嗯, 這個我會。
     assert (!empty ());
     unsigned res = array[0], last = array.back ();
     if (size () > 1) exchange (res, last);
@@ -162,11 +162,11 @@ public:
   }
 
   // Notify the heap, that evaluation of 'less' has changed for 'e'.
-  //
+  // 更新 e 這個元素在 heap 的位置, 這通常是因為 e 所帶有的鍵值已經自己改變, 有時候例如 bump_score 的時候就會用到。
   void update (unsigned e) {
     assert (contains (e));
     up (e);
-    down (e);
+    down (e); // 和 push_back 一樣, 我不知道為什麼還要作 down
     check ();
   }
 

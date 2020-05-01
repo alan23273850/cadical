@@ -579,7 +579,7 @@ void Internal::subsume (bool update_limits) {
 
   if (opts.subsume) {
     reset_watches ();
-    subsume_round ();
+    subsume_round (); // line 323
     init_watches ();
     connect_watches ();
     if (!unsat && !propagate ()) {
@@ -590,8 +590,8 @@ void Internal::subsume (bool update_limits) {
 
   // Schedule 'vivification' in 'subsume' as well as 'transitive reduction'.
   //
-  if (opts.vivify) vivify ();
-  if (opts.transred) transred ();
+  if (opts.vivify) vivify (); // line 1062 of vivify.cpp
+  if (opts.transred) transred (); // line 11 of transred.cpp
 
 UPDATE_LIMITS:
 

@@ -7,7 +7,7 @@ namespace CaDiCaL {
 // local to this file).  It turns out that 'unassign' does not need a
 // specialization for 'probe' nor 'vivify' and thus it is shared.
 
-inline void Internal::unassign (int lit) {
+inline void Internal::unassign (int lit) { // only used in line 94
   assert (val (lit) > 0);
   const int idx = vidx (lit);
   vals[idx] = 0;
@@ -16,14 +16,14 @@ inline void Internal::unassign (int lit) {
 
   // In the standard EVSIDS variable decision heuristic of MiniSAT, we need
   // to push variables which become unassigned back to the heap.
-  //
+  // 所以這邊就不用管是在 EVSIDS 還是 VMTF 模式底下了嗎?
   if (!scores.contains (idx)) scores.push_back (idx);
 
   // For VMTF we need to update the 'queue.unassigned' pointer in case this
   // variable sits after the variable to which 'queue.unassigned' currently
   // points.  See our SAT'15 paper for more details on this aspect.
-  //
-  if (queue.bumped < btab[idx]) update_queue_unassigned (idx);
+  // 所以這邊就不用管是在 EVSIDS 還是 VMTF 模式底下了嗎?
+  if (queue.bumped < btab[idx]) update_queue_unassigned (idx); // 如果新被 unassign 的變數比原本最右邊一個 unassigned 的變數還要右邊, 根據 paper 我必須更新這個指標
 }
 
 /*------------------------------------------------------------------------*/

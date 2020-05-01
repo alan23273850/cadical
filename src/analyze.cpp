@@ -36,13 +36,13 @@ void Internal::learn_unit_clause (int lit) {
 void Internal::bump_queue (int lit) {
   assert (opts.bump);
   const int idx = vidx (lit);
-  if (!links[idx].next) return;
-  queue.dequeue (links, idx);
-  queue.enqueue (links, idx);
+  if (!links[idx].next) return; // 如果我後繼無人, 那也沒有必要移動了。
+  queue.dequeue (links, idx); // 把這個變數拉
+  queue.enqueue (links, idx); // 到 VMTF queue 的最尾端 (last 的後面)
   assert (stats.bumped != INT64_MAX);
-  btab[idx] = ++stats.bumped;
+  btab[idx] = ++stats.bumped; // 因為有 enqueue 的動作, 必須更新 timestamp
   LOG ("moved to front variable %d and bumped to %" PRId64 "", idx, btab[idx]);
-  if (!vals[idx]) update_queue_unassigned (idx);
+  if (!vals[idx]) update_queue_unassigned (idx); // 如果最右邊的元素變成 unassigned, 為了要滿足 next-search 指標的所有右邊元素都是 assigned 的條件, 必須把此指標也跟著移到最右邊
 }
 
 /*------------------------------------------------------------------------*/
@@ -54,7 +54,7 @@ void Internal::bump_queue (int lit) {
 // same trick as in older solvers (since the MiniSAT team invented EVSIDS)
 // and simply put a hard limit here.  It is less elegant but easy to port.
 
-static inline bool evsids_limit_hit (double score) {
+static inline bool evsids_limit_hit (double score) { // 達到天花板高度就應該開始調整 score 縮放倍率了
   assert (sizeof (score) == 8); // assume IEEE 754 64-bit double
   return score > 1e150;         // MAX_DOUBLE is around 1.8e308
 }
@@ -72,63 +72,63 @@ void Internal::rescore () {
   }
   PHASE ("rescore", stats.rescored,
     "rescoring %d variable scores by 1/%g", max_var, divider);
-  assert (divider > 0);
-  double factor = 1.0 / divider;
+  assert (divider > 0); // 在這之前要選 divider, 為了確保除完之後每個人的 score 和 global increment score 都不超過 1, divider 只好選在這之中最大的那個數字
+  double factor = 1.0 / divider; // 不懂為何要多此一舉又生一個新的變數 factor, 後面直接用 / divider 不是很好嗎?
   for (int idx = 1; idx <= max_var; idx++)
-    stab[idx] *= factor;
-  scinc *= factor;
+    stab[idx] *= factor; // 也可以寫成 /= divider;
+  scinc *= factor; // 也可以寫成 /= divider; 這邊要特別注意, 不是只有變數 score 要 scaling, 在 bump 的時候所加的 scinc = g^i 也要一起作 (兩倍率相等的數字才能相加)
   PHASE ("rescore", stats.rescored,
     "new score increment %g after %" PRId64 " conflicts",
     scinc, stats.conflicts);
 }
 
-void Internal::bump_score (int lit) {
+void Internal::bump_score (int lit) { // 我們想 bump "lit" 所對應到的變數的 score
   assert (opts.bump);
   int idx = vidx (lit);
   double old_score = score (idx);
-  assert (!evsids_limit_hit (old_score));
-  double new_score = old_score + scinc;
-  if (evsids_limit_hit (new_score)) {
+  assert (!evsids_limit_hit (old_score)); // 開始之前先行確認 old_score 尚未摸到天花板, but why?? is it necessary??
+  double new_score = old_score + scinc; // 先根據公式 s + g^i 算出 new_score
+  if (evsids_limit_hit (new_score)) { // 和典型 VSIDS 不同, 這邊是快碰到天花板時才作同除的動作, 如果 new_score 達天花板...
     LOG ("bumping %g score of %d hits EVSIDS score limit", old_score, idx);
-    rescore ();
+    rescore (); // 對所有變數, 包含 g^i, 的 score 作 scaling
     old_score = score (idx);
-    assert (!evsids_limit_hit (old_score));
-    new_score = old_score + scinc;
+    assert (!evsids_limit_hit (old_score)); // 原本的 old_score 尚未摸到天花板, 作 scaling 之後應該也要如此
+    new_score = old_score + scinc; // scaling 之後再重算一次 new_score
   }
-  assert (!evsids_limit_hit (new_score));
+  assert (!evsids_limit_hit (new_score)); // 因為縮放倍率是挑最大的那個數字去除, 所以 new_score <= 1 + 1 = 2 並不會達到 1e150
   LOG ("new %g score of %d", new_score, idx);
-  score (idx) = new_score;
-  if (scores.contains (idx)) scores.update (idx);
+  score (idx) = new_score; // 存回新計算的分數
+  if (scores.contains (idx)) scores.update (idx); // 根據新計算的分數更新 idx 在 heap 的位置
 }
 
 // Important variables recently used in conflict analysis are 'bumped',
 
-void Internal::bump_variable (int lit) {
+void Internal::bump_variable (int lit) { // 依據當下的環境可以走 VMTF 或 EVSIDS 兩種模式。
   if (use_scores ()) bump_score (lit);
   else bump_queue (lit);
 }
 
 // After every conflict we increase the score increment by a factor.
 
-void Internal::bump_scinc () {
-  assert (use_scores ());
-  assert (!evsids_limit_hit (scinc));
+void Internal::bump_scinc () { // 其實就是 g^i -> g^(i+1)
+  assert (use_scores ()); // 只有在 VMTF 模式下這個函式才有意義
+  assert (!evsids_limit_hit (scinc)); // 確認 scinc 尚未摸到天花板, but why?? is it necessary??
   double f = 1e3/opts.scorefactor;
-  double new_scinc = scinc * f;
-  if (evsids_limit_hit (new_scinc)) {
+  double new_scinc = scinc * f; // g^i -> g^(i+1)
+  if (evsids_limit_hit (new_scinc)) { // 如果 new_scinc 很不幸地碰到了天花板
     LOG ("bumping %g increment by %g hits EVSIDS score limit", scinc, f);
-    rescore ();
-    new_scinc = scinc * f;
+    rescore (); // 將對整體數值作 scaling
+    new_scinc = scinc * f; // scaling 之後再度重新計算
   }
-  assert (!evsids_limit_hit (new_scinc));
+  assert (!evsids_limit_hit (new_scinc)); // 希望不會再碰到天花板, 不過這應該不是很嚴謹, 因為我們並不知道 f 的範圍
   LOG ("bumped score increment from %g to %g with factor %g",
     scinc, new_scinc, f);
-  scinc = new_scinc;
+  scinc = new_scinc; // 把新結果存回原變數
 }
 
 /*------------------------------------------------------------------------*/
 
-struct analyze_bumped_rank {
+struct analyze_bumped_rank { // only used in line 168
   Internal * internal;
   analyze_bumped_rank (Internal * i) : internal (i) { }
   uint64_t operator () (const int & a) const {
@@ -136,7 +136,7 @@ struct analyze_bumped_rank {
   }
 };
 
-struct analyze_bumped_smaller {
+struct analyze_bumped_smaller { // only used in line 168
   Internal * internal;
   analyze_bumped_smaller (Internal * i) : internal (i) { }
   bool operator () (const int & a, const int & b) const {
@@ -148,7 +148,7 @@ struct analyze_bumped_smaller {
 
 /*------------------------------------------------------------------------*/
 
-void Internal::bump_variables () {
+void Internal::bump_variables () { // only used in line 710 to bump all variables related to conflicts (這裡故意用模糊的詞彙 "related to", 因尚未弄清楚細節)
 
   assert (opts.bump);
 
@@ -171,7 +171,7 @@ void Internal::bump_variables () {
   for (const auto & lit : analyzed)
     bump_variable (lit);
 
-  if (use_scores ()) bump_scinc ();
+  if (use_scores ()) bump_scinc (); // 如果是在 EVSIDS 環境下, 就還要考慮 g^i
 
   STOP (bump);
 }
@@ -283,7 +283,7 @@ inline void Internal::bump_also_reason_literals (int lit, int limit) {
   }
 }
 
-inline void Internal::bump_also_all_reason_literals () {
+inline void Internal::bump_also_all_reason_literals () { // only used in line 157
   assert (opts.bumpreason);
   assert (opts.bumpreasondepth > 0);
   for (const auto & lit : clause)
@@ -707,7 +707,7 @@ void Internal::analyze () {
 
   // Update decision heuristics.
   //
-  if (opts.bump) bump_variables ();
+  if (opts.bump) bump_variables (); // line 151 of analyze.cpp
 
   // Minimize the 1st UIP clause as pioneered by Niklas Soerensson in
   // MiniSAT and described in our joint SAT'09 paper.
