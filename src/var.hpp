@@ -17,7 +17,7 @@ struct Var {
 
   union {
 
-    Clause * reason; // implication graph edge during search
+    Clause * reason; // implication graph edge during search, 理由子句, 它會包含代表自己的頂點
     int parent;      // implication graph parent during probing
 
   };

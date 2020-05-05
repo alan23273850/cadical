@@ -220,33 +220,33 @@ inline void Internal::bump_clause (Clause * c) {
 // called 'glue', or 'LBD').
 
 inline void
-Internal::analyze_literal (int lit, int & open) {
+Internal::analyze_literal (int lit, int & open) { // only used in line 250
   assert (lit);
   Flags & f = flags (lit);
-  if (f.seen) return;
+  if (f.seen) return; // 已經處理過的變數就不要再走一遍了 (注意 flag 是跟 variable 不是跟 literal)
   Var & v = var (lit);
-  if (!v.level) return;
-  assert (val (lit) < 0);
-  assert (v.level <= level);
-  if (v.level < level) clause.push_back (lit);
+  if (!v.level) return; // why??
+  assert (val (lit) < 0); // reason clause 裡面的 literal 應該都要是 false (這樣才能造成 implication)
+  assert (v.level <= level); // reason clause 裡面的 literal 的 decision level 也不應該超過 "current" decision level
+  if (v.level < level) clause.push_back (lit); // 所有在 reason clause 之中 level 不達最高級的 literal 從來就都沒有被取代的可能, 於是可以放心地加進我們最後的答案裡
   Level & l = control[v.level];
-  if (!l.seen.count++) {
+  if (!l.seen.count++) { // 如果這個 level 的變數都還沒看過的話
     LOG ("found new level %d contributing to conflict", v.level);
-    levels.push_back (v.level);
+    levels.push_back (v.level); // why??
   }
-  if (v.trail < l.seen.trail) l.seen.trail = v.trail;
-  f.seen = true;
-  analyzed.push_back (lit);
+  if (v.trail < l.seen.trail) l.seen.trail = v.trail; // why??
+  f.seen = true; // 已經處裡過之後就標成 true
+  analyzed.push_back (lit); // why??
   LOG ("analyzed literal %d assigned at level %d", lit, v.level);
-  if (v.level == level) open++;
+  if (v.level == level) open++; // 如果遇到 "current" decision level 的變數, 就遞增 open
 }
 
 inline void
-Internal::analyze_reason (int lit, Clause * reason, int & open) {
+Internal::analyze_reason (int lit, Clause * reason, int & open) { // only used in line 682
   assert (reason);
   bump_clause (reason);
   for (const auto & other : *reason)
-    if (other != lit)
+    if (other != lit) // 除了自己以外的 literal 都要看過一遍
       analyze_literal (other, open);
 }
 
@@ -376,8 +376,8 @@ Clause * Internal::new_driving_clause (const int glue, int & jump) {
       clause.begin (), clause.end (),
       analyze_trail_negative_rank (this), analyze_trail_larger (this));
 
-    jump = var (clause[1]).level;
-    res = new_learned_redundant_clause (glue);
+    jump = var (clause[1]).level; // 除了 1-UIP 之外最高的那個 decision level
+    res = new_learned_redundant_clause (glue); // line 374 of clause.cpp
     if (glue <= opts.reducetier2glue) res->used = 2;
     else res->used = 1;
   }
@@ -494,24 +494,24 @@ inline int Internal::determine_actual_backtrack_level (int jump) {
 
     int best_idx = 0, best_pos = 0;
 
-    if (use_scores ()) {
+    if (use_scores ()) { // 如果使用 EVSIDS
       for (size_t i = control[jump + 1].trail; i < trail.size (); i++) {
-        const int idx = abs (trail[i]);
+        const int idx = abs (trail[i]); // 它這邊怎麼不用 vidx 而要用 abs 呢?
         if (best_idx && !score_smaller (this) (best_idx, idx)) continue;
         best_idx = idx;
         best_pos = i;
-      }
+      } // 結束這個迴圈之後, 會找到從 jump+1 級的一開始到整個 trail 的結尾之中分數最高的 variable
       LOG ("best variable score %g", score (best_idx));
-    } else {
+    } else { // 如果使用 VMTF
       for (size_t i = control[jump + 1].trail; i < trail.size (); i++) {
-        const int idx = abs (trail[i]);
+        const int idx = abs (trail[i]); // 它這邊怎麼不用 vidx 而要用 abs 呢?
         if (best_idx && bumped (best_idx) >= bumped (idx)) continue;
         best_idx = idx;
         best_pos = i;
-      }
+      } // 結束這個迴圈之後, 會找到從 jump+1 級的一開始到整個 trail 的結尾之中 enqueue 時間戳最大的 variable
       LOG ("best variable bumped %" PRId64 "", bumped (best_idx));
     }
-    assert (best_idx); // 到這邊應該已經選好最棒的 literal 了, 只是我還不知道方法的細節
+    assert (best_idx); // 到這邊就已經選好最棒的 variable 了!
     LOG ("best variable %d at trail position %d", best_idx, best_pos);
 
     // Now find the frame and decision level in the control stack of that
@@ -642,8 +642,8 @@ void Internal::analyze () {
     // then abandoned) is to use 'conflict_level' instead of 'level' in the
     // analysis, which however requires to pass it to the 'analyze_reason'
     // and 'analyze_literal' functions.
-    //
-    backtrack (conflict_level); // 上面註解已有解釋為什麼這邊要作多餘的 backtrack, 但我還沒弄懂
+    // 之所以要先回到 conflict_level 上, 是因為之後會從 trail 的尾端開始往回找 1-UIP (其 level 並不超過 conflict_level), 如果從太高的 level 開始往回找的話會很浪費時間...
+    backtrack (conflict_level);
   }
 
   // Actual conflict on root level, thus formula unsatisfiable.
@@ -672,27 +672,27 @@ void Internal::analyze () {
   Clause * reason = conflict;
   LOG (reason, "analyzing conflict");
 
-  assert (clause.empty ());
+  assert (clause.empty ()); // 先確保我們要拿來裝答案的容器是呈清空狀態, is this always guaranteed?
 
   int i = trail.size ();        // Start at end-of-trail.
   int open = 0;                 // Seen but not processed on this level.
   int uip = 0;                  // The first UIP literal.
 
-  for (;;) { // 這一大段迴圈都是在找 uip (應該是ㄅ)
-    analyze_reason (uip, reason, open);
-    uip = 0;
+  for (;;) { // 這一大段迴圈都是在找 1-UIP
+    analyze_reason (uip, reason, open); // 輸入排除 uip 的 reason clause, 此函式會把裡面的 variable 都標示為 "看過", 也就是說明它們確實是 uip (conflict vertex) 的 "上游" 的意思, 對 line 687 來說很重要; 並且累加這次看到的 current decision level 變數個數到 open counter; 除此之外, 因為未達最高級的 literal 不會被取代掉, 它們會直接被裝進容器 clause 裡!
+    uip = 0; // 此變數在迭代過程中是作為 current decision level 的下游頂點, 為了要進入迴圈必須先設為 0
     while (!uip) {
-      assert (i > 0);
-      const int lit = trail[--i];
-      if (!flags (lit).seen) continue;
-      if (var (lit).level == level) uip = lit;
-    }
-    if (!--open) break;
-    reason = var (uip).reason;
+      assert (i > 0); // why??
+      const int lit = trail[--i]; // 由後往前依序取出已經決定過的 literal
+      if (!flags (lit).seen) continue; // 沒看過的 variable 意味著它並不是從 conflict vertex 往上推的上游頂點, 那來路不明的 literal 就必須摒棄, 於是我們要回到迴圈一開始再次取出新的 literal
+      if (var (lit).level == level) uip = lit; // 如果從 conflict 往上推的上游頂點是 "current" decision level, 那它就是我們要的下游 (即將被取代的) 頂點
+    } // 注意到如果 line 688 走 else 的話, 因為 uip 仍然為 0, 所以會回到 line 684 再重跑一次迴圈
+    if (!--open) break; // 能走到這一步, 代表我又從 trail 之中消化掉一個 conflict 系列頂點之中是 "current" decision level 的那一個, 所以 open 要遞減; 那如果在遞減之前的 open == 1, 就代表 learned clause 裡面最高級的 literal 只剩一個, 那我們的目的就達到了! 此時的 uip 即我們要的 1-UIP!
+    reason = var (uip).reason; // 找出下游頂點的所有上游頂點 (含下游頂點本身)
     LOG (reason, "analyzing %d reason", uip);
   }
-  LOG ("first UIP %d", uip); // 找到 uip 了!! 但詳細的方法我還不太會...
-  clause.push_back (-uip);
+  LOG ("first UIP %d", uip); // 找到 1-UIP 了!!
+  clause.push_back (-uip); // 最後把最重要的 1-UIP 也存進我們的解答容器 clause 裡
 
   // Update glue and learned (1st UIP literals) statistics.
   //
@@ -706,12 +706,12 @@ void Internal::analyze () {
   assert (glue < size);
 
   // Update decision heuristics.
-  //
+  // 因為發生了 conflict, 必須更新 variable score, 只是說為什麼 line 615 的程式區段就不用做呢?
   if (opts.bump) bump_variables (); // line 151 of analyze.cpp
 
   // Minimize the 1st UIP clause as pioneered by Niklas Soerensson in
   // MiniSAT and described in our joint SAT'09 paper.
-  //
+  // 這個功能我還沒看...
   if (size > 1) { // 我在想下面那一層 opts.minimize 的條件式是否可以往上拉到這一層?
     if (opts.minimize) minimize_clause ();
     size = (int) clause.size ();
@@ -734,8 +734,8 @@ void Internal::analyze () {
   UPDATE_AVERAGE (averages.current.level, new_level);
   backtrack (new_level); // 既然已經算好目標高度, 當然就可以直接 backtrack 了!
 
-  if (uip) search_assign_driving (-uip, driving_clause); // 如果有 uip 的話當然就強迫把它的反向 -uip 設成 true, 才代表我們有確實學習到新的 clause
-  else learn_empty_clause (); // 不確定其正確性
+  if (uip) search_assign_driving (-uip, driving_clause); // 如果有 uip (implied literal) 的話當然就強迫把它的反向 -uip 設成 true, 才代表我們有確實學習到 driving_clause
+  else learn_empty_clause (); // 不確定其正確性, uip 有可能是 0 嗎?
 
   if (stable) reluctant.tick (); // Reluctant has its own 'conflict' counter. 這是什麼??
 
@@ -744,7 +744,7 @@ void Internal::analyze () {
   clear_analyzed_literals ();
   clear_analyzed_levels ();
   clause.clear ();
-  conflict = 0; // 因為 conflict 已經在上面處理掉了, 所以這邊旗標值應該要歸 0
+  conflict = 0; // 因為 conflict 已經在上面處理掉了, 所以這邊應該要回歸空指標 (NULL)
 
   STOP (analyze);
 

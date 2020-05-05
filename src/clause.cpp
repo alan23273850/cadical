@@ -113,7 +113,7 @@ Clause * Internal::new_clause (bool red, int glue) {
   c->size = size;
   c->pos = 2;
 
-  for (int i = 0; i < size; i++) c->literals[i] = clause[i];
+  for (int i = 0; i < size; i++) c->literals[i] = clause[i]; // 這一步是關鍵, 把 clause 這個 vector 內的 literal 通通裝到真正的子句指標 (解答) c 之中
 
   // Just checking that we did not mess up our sophisticated memory layout.
   // This might be compiler dependent though. Crucial for correctness.
@@ -132,7 +132,7 @@ Clause * Internal::new_clause (bool red, int glue) {
     stats.added.irredundant++;
   }
 
-  clauses.push_back (c);
+  clauses.push_back (c); // 再把學習到的子句裝進我們的 global database 裡面
   LOG (c, "new");
 
   if (likely_to_be_kept_clause (c)) mark_added (c);
@@ -371,7 +371,7 @@ void Internal::add_new_original_clause () {
 // that the clause is at least of size 2, and the first two literals
 // are assigned at the highest decision level.
 //
-Clause * Internal::new_learned_redundant_clause (int glue) {
+Clause * Internal::new_learned_redundant_clause (int glue) { // only used in line 380 of analyze.cpp
   assert (clause.size () > 1);
 #ifndef NDEBUG
   for (size_t i = 2; i < clause.size (); i++)

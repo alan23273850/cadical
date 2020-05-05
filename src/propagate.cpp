@@ -67,7 +67,7 @@ inline void Internal::search_assign (int lit, Clause * reason) {
 
   v.level = lit_level; // 存變數賦值等級
   v.trail = (int) trail.size (); // 存變數賦值順序
-  v.reason = reason; // 存變數賦值理由
+  v.reason = reason; // 存變數賦值之理由子句, 注意這個子句的變數有包含 v 本身
   if (!lit_level) learn_unit_clause (lit);  // increases 'stats.fixed', 天然的 implication 便是一個 unit clause
   const signed char tmp = sign (lit); // 從現在開始下面 5 行, 變數前帶正號則賦予變數正號, 變數前帶負號則賦予變數負號, 總之要讓 lit 是正的
   vals[idx] = tmp;
