@@ -150,24 +150,24 @@ bool Internal::propagate () {
   // Updating statistics counter in the propagation loops is costly so we
   // delay until propagation ran to completion.
   //
-  int64_t before = propagated;
+  int64_t before = propagated; // 只要是 trail 位置在 propagated - 1 以前的 literal 都不用看??? 我猜是因為它們當初剛被 assign 的時候就已經 propagate 過一次了, 而現在又有新的 assigned variable 要作 propagation, 自然沒有舊變數的份。
 
-  while (!conflict && propagated != trail.size ()) {
+  while (!conflict && propagated != trail.size ()) { // 在還沒發現 conflicting clause 的情況下, 持續地遍歷 trail 裡的各個 "剛 assign 成 true" 的 literal. 順帶一提, 上面一行是不是建議可以塞一個 assert(!conflict); 呢?
 
-    const int lit = -trail[propagated++];
+    const int lit = -trail[propagated++]; // 我們當前要觀察的 literal (要注意到會放在 trail 裡的 literal 必定是 true)
     LOG ("propagating %d", -lit);
-    Watches & ws = watches (lit);
+    Watches & ws = watches (lit); // 如果 lit 是 true, 那我們就想檢查那些包含 -lit (是 false) 的 clauses 有沒有 conflict 或跑 BCP 的可能
 
     const const_watch_iterator eow = ws.end (); // eow stands for "end of watch"?
     const_watch_iterator i = ws.begin ();
     watch_iterator j = ws.begin ();
 
-    while (i != eow) {
+    while (i != eow) { // 遍歷同一個 literal 底下的各個 watched clause
 
-      const Watch w = *j++ = *i++;
+      const Watch w = *j++ = *i++; // 取完 watch 之後此時的 j 會指向存放 w 的 "下一個" 位置, 因此之後每次要回去找 w 的位置時都要下 j-1
       const signed char b = val (w.blit);
 
-      if (b > 0) continue;                // blocking literal satisfied
+      if (b > 0) continue;                // blocking literal satisfied, 代表有其中一個 literal 是 true, 那整個 clause 就會是 true!
 
       if (w.binary ()) {
 
@@ -194,21 +194,21 @@ bool Internal::propagate () {
 
         // Binary clauses are treated separately since they do not require
         // to access the clause at all (only during conflict analysis, and
-        // there also only to simplify the code).
+        // there also only to simplify the code). 他的意思應該是說, 因為 w.clause-> 的這個動作如果太頻繁的話會造成記憶體內容物太常置換, 進而降低效率, 再加上 binary clause 的處理只需要下面兩行 code 即可完成, 也不需要動用到 clause 裡面的 data, 那我何不直接保留那些 garbage clause, 還能節省掉 w.clause-> 和 j-- 的時間?
 
-        if (b < 0) conflict = w.clause;          // but continue ...
-        else search_assign (w.blit, w.clause);
+        if (b < 0) conflict = w.clause;          // but continue ... 我們知道 w.blit 並不等於 lit, 因為 binary clause 的處理只會在這個區段, 而這邊沒有 assign blocking literal 的 code, 可想而知它們的 blit 只會在 void watch_clause (Clause * c) in line 426 of internal.hpp 設定, 看一下那邊的 code 就知道了。既然 w.blit 不等於 lit, 那這兩個 literal 就都是 false 了, 但為什麼不直接 break 呢???
+        else search_assign (w.blit, w.clause); // 這一行一定是 b == 0 (blocking literal unassigned), 因為 line 170 已經把 b > 0 的情況擋掉了, 所以就讓 blocking literal 變成 true 吧!
 
-      } else {
+      } else { // 從這邊開始就不是 binary clause 了
 
-        if (conflict) break; // Stop if there was a binary conflict already.
+        if (conflict) break; // Stop if there was a binary conflict already. (應是同一個 literal 裡面在之前已經先看過其他 clause 所造成)
 
         // The cache line with the clause data is forced to be loaded here
         // and thus this first memory access below is the real hot-spot of
         // the solver.  Note, that this check is positive very rarely and
-        // thus branch prediction should be almost perfect here.
+        // thus branch prediction should be almost perfect here. 而且下面的 if 不常走進去, 所以 branch prediction 見效???
 
-        if (w.clause->garbage) { j--; continue; }
+        if (w.clause->garbage) { j--; continue; } // 如果這個子句已經被丟掉的話, 當然就繼續看下一個
 
         literal_iterator lits = w.clause->begin ();
 
@@ -217,17 +217,17 @@ bool Internal::propagate () {
         // for conditionally swapping the first two literals, since it
         // turned out to be substantially faster than this one
         //
-        //  if (lits[0] == lit) swap (lits[0], lits[1]);
+        //  if (lits[0] == lit) swap (lits[0], lits[1]); 作者希望把現在正在看的 literal 調到第二個位置。注意到我們正在觀察的 lit 一定會是 lits[0] 或 lits[1] 其中一個, 這從 void watch_clause (Clause * c) in line 426 of internal.hpp 也可以知道。
         //
         // which achieves the same effect, but needs a branch.
         //
         const int other = lits[0]^lits[1]^lit;
-        lits[0] = other, lits[1] = lit;
+        lits[0] = other, lits[1] = lit; /* 這一行很重要... 此時 lits[1] 必為 false */
 
         const signed char u = val (other); // value of the other watch
 
-        if (u > 0) j[-1].blit = other; // satisfied, just replace blit
-        else {
+        if (u > 0) j[-1].blit = other; // satisfied, just replace blit, 並繼續往下一個 watch 邁進
+        else { // 此時第 1 個 literal (lits[0]) 不是 false 就是 unassigned, 而我想要 eagerly 地把自己 (lits[1]) 這個 false watched literal 和後面的 non-false unwatched literal 調換, 所以剛開始一大段都是在做這件事。
 
           // This follows Ian Gent's (JAIR'13) idea of saving the position
           // of the last watch replacement.  In essence it needs two copies
@@ -244,57 +244,57 @@ bool Internal::propagate () {
 
           // Find replacement watch 'r' at position 'k' with value 'v'.
 
-          int r = 0;
-          signed char v = -1;
+          int r = 0; // 這個初始值有必要嗎? 當一開始就 k == end 的時候需要?
+          signed char v = -1; // 這個初始值有必要嗎? 當一開始就 k == end 的時候需要?
 
           while (k != end && (v = val (r = *k)) < 0)
-            k++;
+            k++; // k 從前一次儲存點 middle 開始往後走到下一個 non-false literal, 如果自己本身符合條件的話就不用移動, 此時把變數名稱記錄給 r, 變數值記錄給 v
 
-          if (v < 0) {  // need second search starting at the head?
+          if (v < 0) {  // need second search starting at the head? 如果從 middle 開始到最後面都沒找到的話 (也就是這一段通通都是 false)
 
-            k = lits + 2;
+            k = lits + 2; // 就再重新從第 3 個 literal 開始往後找
             assert (w.clause->pos <= size);
             while (k != middle && (v = val (r = *k)) < 0)
-              k++;
+              k++; // 如果還是找不到的話最後會回到一開始的 middle 點
           }
 
-          w.clause->pos = k - lits;  // always save position
+          w.clause->pos = k - lits;  // always save position, 重新記錄找到的新位置
 
           assert (lits + 2 <= k), assert (k <= w.clause->end ());
 
-          if (v > 0) {
+          if (v > 0) { // 如果找到的 unwatched literal 是 true, 我竟然也不用作 replacement, 直接設定 blocking literal 就好??? 這樣不會出問題嗎??
 
             // Replacement satisfied, so just replace 'blit'.
 
             j[-1].blit = r;
 
-          } else if (!v) {
+          } else if (!v) { // 如果找到的 unwatched literal 是 unassigned
 
             // Found new unassigned replacement literal to be watched.
 
             LOG (w.clause, "unwatch %d in", lit);
 
-            lits[1] = r;
-            *k = lit;
-            watch_literal (r, lit, w.clause);
+            lits[1] = r; // 這兩行其實是在作 swap, 原本的 lits[1] 是 lit (false), 而 *k 是 r (unassigned since !v),
+            *k = lit; // 現在我們把 unassigned 的那個換進 lits[1], 而 false 的那個換出去到 *k
+            watch_literal (r, lit, w.clause); // 更換 watched literal 之後 watch list 也要跟著更新, blocking literal 因為只是為了加快速度, 可以隨便抓, 不一定要是 true
 
-            j--;  // Drop this watch from the watch list of 'lit'.
+            j--;  // Drop this watch from the watch list of 'lit'. 這句話是跟著上面那一行 watch list change 的。
 
-          } else if (!u) {
+          } else if (!u) { // 如果找不到 non-false unwatched literal, 且只剩第 1 個 literal 是 unassigned
 
-            assert (v < 0);
+            assert (v < 0); // 因為 v >= 0 的狀況在 line 265 到 line 282 已經被處理掉了, 所以這一塊的意思就是浮動指標 k 從第 3 個 literal 開始往後搜尋的過程中所看到的 literal 通通都是 false, 而第 2 個 literal 因為其反向在 trail 裡面所以也是 false, 那剩下的結論就如同 line 283 所說...
 
             // The other watch is unassigned ('!u') and all other literals
             // assigned to false (still 'v < 0'), thus we found a unit.
-            //
-            search_assign (other, w.clause);
+            // 這兩行英文其實就是在解釋我在上面幾行所寫的註解
+            search_assign (other, w.clause); // other 根據 line 225 可以知道是第 1 個 literal 的意思
 
             // Similar code is in the implementation of the SAT'18 paper on
             // chronological backtracking but in our experience, this code
             // first does not really seem to be necessary for correctness,
             // and further does not improve running time either.
             //
-            if (opts.chrono > 1) {
+            if (opts.chrono > 1) { // 為什麼要 > 1? 是因為上面那段註解說沒什麼用嗎? 那我就先不看囉
 
               const int other_level = var (other).level;
 
@@ -326,16 +326,16 @@ bool Internal::propagate () {
                 j--;  // Drop this watch from the watch list of 'lit'.
               }
             }
-          } else {
+          } else { // 如果找不到 non-false unwatched literal, 且連第 1 個 literal 都是 false
 
-            assert (u < 0);
+            assert (u < 0); // 因為 u > 0 的情況在 line 229 已經被處理掉了, 而 u == 0 則是在 line 283, 那剩下的情況當然就是 u < 0 囉
             assert (v < 0);
 
             // The other watch is assigned false ('u < 0') and all other
             // literals as well (still 'v < 0'), thus we found a conflict.
 
             conflict = w.clause;
-            break;
+            break; // 停止遍歷這個 literal 底下的 watch
           }
         }
       }
@@ -348,14 +348,14 @@ bool Internal::propagate () {
 
       ws.resize (j - ws.begin ());
     }
-  }
+  } // 而如果已經找到 conflicting clause 了, 就也會順便跳出整個大迴圈, 停止遍歷 trail 裡其他剩下的 literal
 
   if (searching_lucky_phases) {
 
     if (conflict)
       LOG (conflict, "ignoring lucky conflict");
 
-  } else {
+  } else { // 目前還看不出這些統計變數以及 no_conflict_until 會用在哪, 就先不理它們
 
     // Avoid updating stats eagerly in the hot-spot of the solver.
     //
